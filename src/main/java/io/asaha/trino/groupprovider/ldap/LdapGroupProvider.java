@@ -136,6 +136,7 @@ public class LdapGroupProvider implements GroupProvider {
                         return Collections.emptySet();
                     }
 
+                    log.debug("User: [%s], Group Details: [%s]", user, groupAttributes.toString());
                     for (int ix= 0; ix < groupAttributes.size(); ix++){
                         String group = groupAttributes.get(ix).toString();
                         if (group.toLowerCase().contains(groupFilter.toLowerCase())){
