@@ -8,6 +8,8 @@ The groups can be further used for system and catalg authorization and RBAC impl
 
 ## Build
 
+The artifacts are also present in the [Release](https://github.com/arghya18/trino-group-provider-ldap-ad/releases) of this project, incase you do not want to build this project.
+
 ```
 mvn clean package
 ```
@@ -17,13 +19,11 @@ mvn clean package
 
 ### Copy artifacts
 
-Copy the following artifacts to the Trino plugin folder (`<path_to_trino>/plugin/ldap-ad/`)
+Copy the following artifacts from build or from release to the Trino plugin folder (`<path_to_trino>/plugin/ldap-ad/`)
 
 ```
 target/trino-group-provider-ldap-ad-1.0/*.jar
 ```
-
-The artifacts are also present in the Release of this project, incase you do not want to build this project.
 
 ### Prepare configuration file
 
