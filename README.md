@@ -5,11 +5,13 @@ Trino Group Provider LDAP is a Trino (formerly Presto SQL) plugin to map user na
 Its an implementation of Trino Group Provider, which will map Coorporate/Local LDAP groups with AD users.
 The groups can be further used for system and catalg authorization and RBAC implemenation based on AD groups.
 
+
 ## Build
 
 ```
 mvn clean package
 ```
+
 
 ## Deploy
 
@@ -46,7 +48,9 @@ ldap.user-search-filter=(&(objectClass=person)(sAMAccountName=${USER}))
 | `ldap.max-retry-count` | **5** | Retry count. |
 | `ldap.retry-interval` | **2s** | Retry interval. |
 
+
 ### Import LDAP server SSL certificate
+
 Import SSL certificates in Trino coordinator required to connect to LDAP server using keytool, below is one example
 
 ```
