@@ -51,5 +51,4 @@ Import SSL certificates in Trino coordinator required to connect to LDAP server 
 
 ```
 sudo keytool -import -alias ldap_cert -keystore $JAVA_HOME/lib/security/cacerts -file <path_to_ldap_cert>.pem -storepass changeit -noprompt
-
 ```
