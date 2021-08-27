@@ -2,8 +2,8 @@
 
 Trino Group Provider LDAP is a Trino (formerly Presto SQL) plugin to map user names to groups using an LDAP server 
 
-Its an implementation of Trino Group Provider, which will map Coorporate/Local LDAP groups with AD users.
-The groups can be further used for system and catalg authorization and RBAC implemenation based on AD groups.
+Its an implementation of Trino Group Provider, which will map Corporate/Local LDAP groups with AD users.
+The groups can be further used for system and catalog authorization and RBAC implementation based on AD groups.
 
 
 ## Build
