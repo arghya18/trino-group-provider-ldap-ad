@@ -4,9 +4,10 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
+import io.trino.plugin.base.ssl.SslUtils;
 import io.trino.spi.classloader.ThreadContextClassLoader;
 import io.trino.spi.security.GroupProvider;
-
+import io.trino.plugin.base.ldap.*;
 import javax.naming.AuthenticationException;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
@@ -28,17 +29,17 @@ public class LdapGroupProvider implements GroupProvider {
     private static final Logger log = Logger.get(LdapGroupProvider.class);
     private final String ldapAdminUser;
     private final String ldapAdminPassword;
+    private final Optional<SSLContext> sslContext;
     private final String userBaseDistinguishedName;
     private final String userBaseDistinguishedNameSecondary;
     private final String userSearchFilter;
     private final String groupFilter;
     private final String maxRetryCount;
     private final String retryInterval;
-    private final Optional<File> keyStorePath;
-    private final Optional<String> keyStorePassword;
-    private final Optional<File> trustStorePath;
-    private final Optional<String> trustStorePassword;
-    private final Optional<SSLContext> sslContext;
+    private final String keystorePath;
+    private final String keystorePassword;
+    private final String truststorePath;
+    private final String truststorePassword;
     private final Map<String, String> basicEnvironment;
     private final LoadingCache<String, Set<String>> groupListCache;
     private boolean isIgnoreReferrals = false;
@@ -46,23 +47,54 @@ public class LdapGroupProvider implements GroupProvider {
     LdapGroupProvider(Map<String, String> config){
         String ldapUrl = config.get("ldap.url");
         this.ldapAdminUser = config.get("ldap.admin-user");
+        if (this.ldapAdminUser == null) {
+            log.error("You must specify option 'ldap.admin-user'");
+            throw new IllegalArgumentException("You must specify option 'ldap.admin-user'");
+        }
         this.ldapAdminPassword = config.get("ldap.admin-password");
+        if (this.ldapAdminPassword == null) {
+            log.error("You must specify option 'ldap.admin-password'");
+            throw new IllegalArgumentException("You must specify option 'ldap.admin-password'");
+        }
         this.userBaseDistinguishedName = config.get("ldap.user-base-dn");
+        if (this.userBaseDistinguishedName == null) {
+            log.error("You must specify option 'ldap.user-base-dn'");
+            throw new IllegalArgumentException("You must specify option 'ldap.user-base-dn'");
+        }
         this.userBaseDistinguishedNameSecondary = config.getOrDefault("ldap.user-base-dn-secondary", userBaseDistinguishedName);
         this.userSearchFilter = config.get("ldap.user-search-filter");
+        if (this.userSearchFilter == null) {
+            log.error("You must specify option 'ldap.user-search-filter'");
+            throw new IllegalArgumentException("You must specify option 'ldap.user-search-filter'");
+        }
         this.groupFilter = config.getOrDefault("ldap.group-filter","ou");
         String ldapCacheTtl = config.getOrDefault("ldap.cache-ttl","1h");
         this.maxRetryCount = config.getOrDefault("ldap.max-retry-count", "5");
         this.retryInterval = config.getOrDefault("ldap.retry-interval","2s");
-        this.keyStorePath = Optional.ofNullable(new File(config.get("ldap.ssl.keystore.path")));
-        this.keyStorePassword = Optional.of(config.get("ldap.ssl.keystore.password"));
-        this.trustStorePath = Optional.of(new File(config.get("ldap.ssl.truststore.path")));
-        this.trustStorePassword = Optional.of(config.get("ldap.ssl.truststore.password"));
+        this.keystorePath = config.getOrDefault("ldap.ssl.keystore.path",null);
+        this.keystorePassword = config.getOrDefault("ldap.ssl.keystore.password",null);
+        this.truststorePath = config.getOrDefault("ldap.ssl.truststore.path",null);
+        this.truststorePassword = config.getOrDefault("ldap.ssl.truststore.password",null);
+
+
+        File keystoreFile;
+        if(keystorePath != null){
+            keystoreFile = new File(keystorePath);
+        } else {
+            keystoreFile = null;
+        }
+        File truststoreFile;
+        if(truststorePath != null){
+            truststoreFile = new File(truststorePath);
+        } else {
+            truststoreFile = null;
+        }
+
         this.sslContext = createSslContext(
-                this.keyStorePath,
-                this.keyStorePassword,
-                this.trustStorePath,
-                this.trustStorePassword
+                Optional.ofNullable(keystoreFile),
+                Optional.ofNullable(keystorePassword),
+                Optional.ofNullable(truststoreFile),
+                Optional.ofNullable(truststorePassword)
         );
 
         this.basicEnvironment = ImmutableMap.<String, String>builder()
@@ -82,6 +114,18 @@ public class LdapGroupProvider implements GroupProvider {
         return pattern.replace("${USER}", user);
     }
 
+    private static Optional<SSLContext> createSslContext(Optional<File> keyStorePath, Optional<String> keyStorePassword, Optional<File> trustStorePath, Optional<String> trustStorePassword) {
+        if (keyStorePath.isEmpty() && trustStorePath.isEmpty()) {
+            return Optional.empty();
+        } else {
+            try {
+                return Optional.of(SslUtils.createSSLContext(keyStorePath, keyStorePassword, trustStorePath, trustStorePassword));
+            } catch (IOException | GeneralSecurityException var5) {
+                throw new RuntimeException(var5);
+            }
+        }
+    }
+
     private Map<String, String> createEnvironment(String userDistinguishedName, String password)
     {
         ImmutableMap.Builder<String, String> environment = ImmutableMap.<String, String>builder()
@@ -89,6 +133,7 @@ public class LdapGroupProvider implements GroupProvider {
                 .put(SECURITY_AUTHENTICATION, "simple")
                 .put(SECURITY_PRINCIPAL, userDistinguishedName)
                 .put(SECURITY_CREDENTIALS, password);
+
         sslContext.ifPresent(context -> {
             LdapSslSocketFactory.setSslContextForCurrentThread(context);
 
@@ -98,28 +143,12 @@ public class LdapGroupProvider implements GroupProvider {
         return environment.build();
     }
 
-    private static Optional<SSLContext> createSslContext(
-            Optional<File> keyStorePath,
-            Optional<String> keyStorePassword,
-            Optional<File> trustStorePath,
-            Optional<String> trustStorePassword)
-    {
-        if (keyStorePath.isEmpty() && trustStorePath.isEmpty()) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(SslUtils.createSSLContext(keyStorePath, keyStorePassword, trustStorePath, trustStorePassword));
-        }
-        catch (GeneralSecurityException | IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private DirContext createUserDirContext(String userDistinguishedName, String password, int retryCount)
             throws NamingException
     {
         Map<String, String> environment = createEnvironment(userDistinguishedName, password);
         DirContext dirContext;
+
         try {
             //return new InitialDirContext(new Hashtable<>(environment));
             dirContext = new InitialDirContext(new Hashtable<>(environment));
@@ -141,6 +170,7 @@ public class LdapGroupProvider implements GroupProvider {
             }
             dirContext = createUserDirContext(userDistinguishedName, password, ++retryCount);
         }
+
         return dirContext;
     }
 
@@ -151,6 +181,10 @@ public class LdapGroupProvider implements GroupProvider {
         String[] attrIDs = {"memberOf"};
         searchControls.setReturningAttributes(attrIDs);
         searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+        log.info("-------------------------");
+        log.info("user: "+user);
+        log.info("userBaseDN: "+userBaseDN);
+        log.info(context.getEnvironment().toString());
         return context.search(userBaseDN, replaceUser(userSearchFilter, user), searchControls);
     }
 
