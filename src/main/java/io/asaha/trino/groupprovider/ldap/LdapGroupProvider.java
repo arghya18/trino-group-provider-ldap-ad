@@ -11,10 +11,15 @@ import javax.naming.AuthenticationException;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
 import javax.naming.directory.*;
+import javax.net.ssl.SSLContext;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.security.GeneralSecurityException;
 import io.airlift.log.Logger;
 import io.airlift.units.Duration;
+
+import java.io.File;
+import java.io.IOException;
 
 import static javax.naming.Context.*;
 
@@ -29,7 +34,11 @@ public class LdapGroupProvider implements GroupProvider {
     private final String groupFilter;
     private final String maxRetryCount;
     private final String retryInterval;
-
+    private final Optional<File> keyStorePath;
+    private final Optional<String> keyStorePassword;
+    private final Optional<File> trustStorePath;
+    private final Optional<String> trustStorePassword;
+    private final Optional<SSLContext> sslContext;
     private final Map<String, String> basicEnvironment;
     private final LoadingCache<String, Set<String>> groupListCache;
     private boolean isIgnoreReferrals = false;
@@ -45,6 +54,16 @@ public class LdapGroupProvider implements GroupProvider {
         String ldapCacheTtl = config.getOrDefault("ldap.cache-ttl","1h");
         this.maxRetryCount = config.getOrDefault("ldap.max-retry-count", "5");
         this.retryInterval = config.getOrDefault("ldap.retry-interval","2s");
+        this.keyStorePath = Optional.ofNullable(new File(config.get("ldap.ssl.keystore.path")));
+        this.keyStorePassword = Optional.of(config.get("ldap.ssl.keystore.password"));
+        this.trustStorePath = Optional.of(new File(config.get("ldap.ssl.truststore.path")));
+        this.trustStorePassword = Optional.of(config.get("ldap.ssl.truststore.password"));
+        this.sslContext = createSslContext(
+                this.keyStorePath,
+                this.keyStorePassword,
+                this.trustStorePath,
+                this.trustStorePassword
+        );
 
         this.basicEnvironment = ImmutableMap.<String, String>builder()
                 .put(INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
@@ -70,7 +89,30 @@ public class LdapGroupProvider implements GroupProvider {
                 .put(SECURITY_AUTHENTICATION, "simple")
                 .put(SECURITY_PRINCIPAL, userDistinguishedName)
                 .put(SECURITY_CREDENTIALS, password);
+        sslContext.ifPresent(context -> {
+            LdapSslSocketFactory.setSslContextForCurrentThread(context);
+
+            // see https://docs.oracle.com/javase/jndi/tutorial/ldap/security/ssl.html
+            environment.put("java.naming.ldap.factory.socket", LdapSslSocketFactory.class.getName());
+        });
         return environment.build();
+    }
+
+    private static Optional<SSLContext> createSslContext(
+            Optional<File> keyStorePath,
+            Optional<String> keyStorePassword,
+            Optional<File> trustStorePath,
+            Optional<String> trustStorePassword)
+    {
+        if (keyStorePath.isEmpty() && trustStorePath.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(SslUtils.createSSLContext(keyStorePath, keyStorePassword, trustStorePath, trustStorePassword));
+        }
+        catch (GeneralSecurityException | IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private DirContext createUserDirContext(String userDistinguishedName, String password, int retryCount)
