@@ -181,10 +181,6 @@ public class LdapGroupProvider implements GroupProvider {
         String[] attrIDs = {"memberOf"};
         searchControls.setReturningAttributes(attrIDs);
         searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);
-        log.info("-------------------------");
-        log.info("user: "+user);
-        log.info("userBaseDN: "+userBaseDN);
-        log.info(context.getEnvironment().toString());
         return context.search(userBaseDN, replaceUser(userSearchFilter, user), searchControls);
     }
 
