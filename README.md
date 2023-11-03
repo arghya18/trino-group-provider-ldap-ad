@@ -35,18 +35,22 @@ ldap.url=ldaps://ad.company.com:636
 ldap.admin-user=admin@ad.company.com
 ldap.admin-password=admin-password
 ldap.user-base-dn=OU=Sites,DC=ad,DC=company,DC=com
-ldap.user-search-filter=(&(objectClass=person)(sAMAccountName=${USER}))
+ldap.user-search-filter=(&(objectClass=person)(sAMAccountName=${USER})) 
 ```
 
 #### Optional Parameters
 
-| Configuration                            | Default  | Description                |
-| ---------------------------------------- | -------- | -------------------------- |
-| `ldap.user-base-dn-secondary`   | **ldap.user-base-dn** | Secondary base dn.    |
-| `ldap.group-filter` | **ou** | Group Filter. |
-| `ldap.cache-ttl` | **1h** | Cache ttl for LDAP groups. |
-| `ldap.max-retry-count` | **5** | Retry count. |
-| `ldap.retry-interval` | **2s** | Retry interval. |
+| Configuration                  | Default               | Description                                 |
+|--------------------------------|-----------------------|---------------------------------------------|
+| `ldap.user-base-dn-secondary`  | **ldap.user-base-dn** | Secondary base dn.                          |
+| `ldap.group-filter`            | **ou**                | Group Filter.                               |
+| `ldap.cache-ttl`               | **1h**                | Cache ttl for LDAP groups.                  |
+| `ldap.max-retry-count`         | **5**                 | Retry count.                                |
+| `ldap.retry-interval`          | **2s**                | Retry interval.                             |
+| `ldap.ssl.keystore.path`       | **null**              | The path to the PEM or JKS keystore file.   |
+| `ldap.ssl.keystore.password`   | **null**              | Password for the key store.                 |
+| `ldap.ssl.truststore.path`     | **null**              | The path to the PEM or JKS truststore file. |
+| `ldap.ssl.truststore.password` | **null**              | Password for the truststore.                |
 
 
 ### Import LDAP server SSL certificate
@@ -56,3 +60,5 @@ Import SSL certificates in Trino coordinator required to connect to LDAP server 
 ```
 sudo keytool -import -alias ldap_cert -keystore $JAVA_HOME/lib/security/cacerts -file <path_to_ldap_cert>.pem -storepass changeit -noprompt
 ```
+
+If you can't or don't want to import SSL certificates in Trino cacerts keystore, you can use `ldap.ssl.*` parameters to specify   
